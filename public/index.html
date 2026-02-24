@@ -1,0 +1,1032 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GameForge Extractor</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval'; font-src 'self' https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com; connect-src 'self' https://cdnjs.cloudflare.com;">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0908;
+    --bg2: #0f0e0b;
+    --bg3: #161410;
+    --panel: #1a1814;
+    --border: #2a2620;
+    --border-lt: #3d362c;
+    --text: #c8bda0;
+    --text-dim: #7a7060;
+    --text-bright: #ede5d0;
+    --accent: #c9a227;
+    --accent-dim: #8b7320;
+    --accent-glow: rgba(201,162,39,0.12);
+    --mono: 'JetBrains Mono', 'Fira Code', monospace;
+    --serif: 'Cormorant Garamond', 'Georgia', serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 14px;
+    line-height: 1.7;
+    overflow-x: hidden;
+    -webkit-app-region: no-drag;
+  }
+
+  ::selection { background: var(--accent); color: var(--bg); }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border-lt); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+  /* Noise overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* Grid background */
+  .grid-bg {
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 80px 80px;
+    opacity: 0.08;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Layout ── */
+  .app-header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(10,9,8,0.85);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 28px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    -webkit-app-region: drag;
+  }
+
+  .app-header * { -webkit-app-region: no-drag; }
+
+  .header-brand {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+
+  .header-brand .tag {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+
+  .header-brand .title {
+    font-family: var(--serif);
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-bright);
+  }
+
+  .btn {
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    padding: 5px 14px;
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    transition: all 0.2s;
+  }
+  .btn:hover { background: var(--accent-glow); }
+  .btn-dim { border-color: var(--border); color: var(--text-dim); }
+  .btn-dim:hover { border-color: var(--border-lt); color: var(--text); background: var(--bg3); }
+
+  .main-content {
+    position: relative;
+    z-index: 1;
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 28px;
+  }
+
+  /* ── Drop Zone ── */
+  .drop-zone {
+    border: 2px dashed var(--border);
+    padding: 64px 24px;
+    text-align: center;
+    cursor: pointer;
+    background: var(--bg2);
+    transition: border-color 0.3s, background 0.3s;
+    margin-bottom: 24px;
+  }
+  .drop-zone:hover, .drop-zone.dragover {
+    border-color: var(--accent);
+    background: rgba(201,162,39,0.03);
+  }
+  .drop-zone.loading {
+    border-color: var(--accent-dim);
+    cursor: default;
+  }
+  .drop-zone .label {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--accent);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .drop-zone .sub {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  /* Progress bar */
+  .progress-track {
+    width: 100%;
+    max-width: 320px;
+    height: 3px;
+    background: var(--border);
+    margin: 14px auto 0;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.15s;
+  }
+
+  /* ── Stats Grid ── */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 8px;
+    margin-bottom: 24px;
+  }
+  .stat-card {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    padding: 16px 20px;
+  }
+  .stat-card .value {
+    font-family: var(--mono);
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: -0.02em;
+  }
+  .stat-card .label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-top: 4px;
+  }
+
+  /* ── Source bar ── */
+  .source-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    margin-bottom: 20px;
+  }
+  .source-bar .info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .source-bar .info .tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+  }
+  .source-bar .info .name {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text);
+  }
+
+  /* ── Type legend ── */
+  .type-legend {
+    display: flex;
+    gap: 14px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+  .type-legend .item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+  .type-legend .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 1px;
+  }
+
+  /* ── Tabs ── */
+  .tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 20px;
+  }
+  .tab-btn {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-dim);
+    padding: 10px 20px;
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    transition: all 0.15s;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ── Section Tree ── */
+  .section-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-left: 2px solid var(--accent);
+    cursor: default;
+    transition: background 0.15s;
+  }
+  .section-item.expandable { cursor: pointer; }
+  .section-item:hover { background: var(--bg3); }
+  .section-item .page {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    min-width: 36px;
+  }
+  .section-item .title {
+    font-family: var(--serif);
+    font-size: 15px;
+    color: var(--text);
+    flex: 1;
+  }
+  .section-item .meta {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+
+  .subsection-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 12px 6px 32px;
+    border-left: 2px solid var(--border);
+  }
+  .subsection-item .page {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text-dim);
+    min-width: 36px;
+  }
+  .subsection-item .title {
+    font-family: var(--serif);
+    font-size: 14px;
+    color: var(--text-dim);
+  }
+  .subsection-item .meta {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: rgba(122,112,96,0.5);
+  }
+
+  /* ── Block Viewer ── */
+  .block-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  .page-nav {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .page-nav button {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--accent);
+    padding: 4px 10px;
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .page-nav button:disabled { color: var(--text-dim); cursor: default; }
+  .page-nav .counter {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text);
+    min-width: 90px;
+    text-align: center;
+  }
+  .filter-btns { display: flex; gap: 4px; flex-wrap: wrap; }
+  .filter-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 3px 8px;
+    cursor: pointer;
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.15s;
+  }
+  .filter-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-glow);
+  }
+
+  .blocks-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 500px;
+    overflow-y: auto;
+  }
+  .block-card {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    padding: 10px 14px;
+    border-left: 3px solid var(--text-dim);
+  }
+  .block-card.heading { border-left-color: var(--accent); }
+  .block-card.subheading { border-left-color: #a89040; }
+  .block-card.note { border-left-color: #5a9e6f; }
+  .block-card.definition { border-left-color: #6a8cba; }
+
+  .block-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .type-badge {
+    font-family: var(--mono);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 2px 6px;
+    border: 1px solid;
+    white-space: nowrap;
+  }
+  .xref-tag {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: #6a8cba;
+  }
+  .block-text {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text);
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .block-text.heading-text {
+    font-family: var(--serif);
+    font-size: 16px;
+    color: var(--accent);
+  }
+  .block-text.subheading-text {
+    font-family: var(--serif);
+    font-size: 14px;
+  }
+
+  /* ── Raw view ── */
+  .raw-view {
+    max-height: 500px;
+    overflow-y: auto;
+  }
+  .raw-page-header {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 6px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+  }
+  .raw-page-text {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text);
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin: 0;
+    padding: 8px 0;
+  }
+
+  .empty-state {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-dim);
+    padding: 20px;
+    text-align: center;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+</style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+
+<header class="app-header">
+  <div class="header-brand">
+    <span class="tag">GameForge</span>
+    <span class="title">Rulebook Extractor</span>
+  </div>
+  <div id="header-actions"></div>
+</header>
+
+<div class="main-content" id="app"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// EXTRACTION ENGINE
+// ═══════════════════════════════════════════════════════════════════════════
+
+const HEADING_PATTERNS = [
+  /^(\d{1,3}(?:\.\d{1,3}){0,3})\s+(.+)$/,
+  /^((?:X{0,3}(?:IX|IV|V?I{0,3})))\.\s+(.+)$/i,
+  /^([A-Z])\.\s+(.+)$/,
+  /^([A-Z][A-Z\s&\-\/]{4,})$/,
+];
+
+const XREF_PATTERNS = [
+  /(?:see|refer to|as per|per)\s+(?:section|rule|§)?\s*(\d+(?:\.\d+)*)/gi,
+  /(?:section|rule|§)\s*(\d+(?:\.\d+)*)/gi,
+  /\((\d+(?:\.\d+)+)\)/g,
+  /page\s+(\d+)/gi,
+];
+
+const NOTE_PATTERNS = [
+  /^(?:note|important|designer'?s?\s*note|historical\s*note|example|play\s*note)\s*[:\-]/i,
+  /^\[.*\]$/,
+];
+
+const TYPE_COLORS = {
+  heading: "#c9a227",
+  subheading: "#a89040",
+  body: "#7a7060",
+  note: "#5a9e6f",
+  definition: "#6a8cba",
+};
+
+function classifyBlock(text) {
+  const s = text.trim();
+  if (!s) return "empty";
+  for (const p of NOTE_PATTERNS) if (p.test(s)) return "note";
+  for (const p of HEADING_PATTERNS) {
+    if (p.test(s)) {
+      if (s === s.toUpperCase() && s.length < 5) continue;
+      return "heading";
+    }
+  }
+  if (s.length < 80 && !s.endsWith(".") && s[0] === s[0].toUpperCase()) {
+    const words = s.split(/\s+/);
+    if (words.length <= 8 && words.length > 0) {
+      const caps = words.filter(w => w[0] === w[0].toUpperCase()).length / words.length;
+      if (caps > 0.6) return "subheading";
+    }
+  }
+  return "body";
+}
+
+function extractXrefs(text) {
+  const refs = new Set();
+  for (const p of XREF_PATTERNS) {
+    p.lastIndex = 0;
+    let m;
+    while ((m = p.exec(text))) refs.add(m[1]);
+  }
+  return [...refs];
+}
+
+function chunkText(raw, pageNum) {
+  if (!raw) return [];
+
+  const lines = raw.split('\n');
+  const blocks = [];
+  let currentLines = [];
+
+  function flushBlock() {
+    const text = currentLines.join('\n').trim();
+    if (text) blocks.push(text);
+    currentLines = [];
+  }
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+
+    // Empty line = paragraph break
+    if (!line) {
+      flushBlock();
+      continue;
+    }
+
+    // Heading pattern — numbered sections like 1.2, 3.4.1, etc.
+    let isHeading = false;
+    for (const p of HEADING_PATTERNS) {
+      if (p.test(line)) { isHeading = true; break; }
+    }
+    if (/^\d{1,3}(?:\.\d{1,3}){1,3}\s+\S/.test(line)) {
+      isHeading = true;
+    }
+
+    // Bullet points — each is its own block
+    const isBullet = /^[•\-►▪▸●◦‣\*]\s+/.test(line) || /^[a-z]\)\s+/.test(line) || /^\(\d+\)\s+/.test(line);
+
+    // Glossary / definition lines — "Term: definition text"
+    const isDefinition = /^[A-Z][A-Za-z\s\-\/]+:\s{2,}/.test(line) || /^[A-Z][A-Za-z\s\-\/]{2,}:\s+[A-Z]/.test(line);
+
+    // Note patterns
+    let isNote = false;
+    for (const p of NOTE_PATTERNS) {
+      if (p.test(line)) { isNote = true; break; }
+    }
+
+    // Any of these triggers a new block
+    if ((isHeading || isBullet || isDefinition || isNote) && currentLines.length > 0) {
+      flushBlock();
+    }
+
+    currentLines.push(lines[i]);
+
+    // Bullets and definitions are self-contained — flush immediately
+    // BUT gather continuation lines (next line doesn't start a new pattern)
+    if (isBullet || isDefinition) {
+      // Look ahead: gather wrapped continuation lines
+      while (i + 1 < lines.length) {
+        const next = lines[i + 1].trim();
+        if (!next) break;
+        // If next line starts a new pattern, stop gathering
+        let nextIsNew = false;
+        if (/^[•\-►▪▸●◦‣\*]\s+/.test(next)) nextIsNew = true;
+        if (/^[a-z]\)\s+/.test(next)) nextIsNew = true;
+        if (/^\(\d+\)\s+/.test(next)) nextIsNew = true;
+        if (/^\d{1,3}(?:\.\d{1,3}){0,3}\s+[A-Z]/.test(next)) nextIsNew = true;
+        if (/^[A-Z][A-Za-z\s\-\/]+:\s{2,}/.test(next)) nextIsNew = true;
+        if (/^[A-Z][A-Za-z\s\-\/]{2,}:\s+[A-Z]/.test(next)) nextIsNew = true;
+        for (const p of HEADING_PATTERNS) { if (p.test(next)) { nextIsNew = true; break; } }
+        for (const p of NOTE_PATTERNS) { if (p.test(next)) { nextIsNew = true; break; } }
+        if (nextIsNew) break;
+        // It's a continuation line — gather it
+        i++;
+        currentLines.push(lines[i]);
+      }
+      flushBlock();
+    }
+  }
+  flushBlock();
+
+  return blocks.map((text, i) => {
+    const trimmed = text.trim();
+    let blockType = classifyBlock(trimmed);
+
+    // Override: detect bullet entries as body
+    if (/^[•\-►▪▸●◦‣\*]\s+/.test(trimmed)) blockType = "body";
+
+    // Override: detect glossary definitions
+    if (/^[A-Z][A-Za-z\s\-\/]+:\s{2,}/.test(trimmed) || /^[A-Z][A-Za-z\s\-\/]{2,}:\s+[A-Z]/.test(trimmed)) {
+      blockType = "definition";
+    }
+
+    if (blockType === "empty") return null;
+    return { page: pageNum, index: i, text: trimmed, blockType, xrefs: extractXrefs(trimmed), section: null };
+  }).filter(Boolean);
+}
+
+function buildHierarchy(blocks) {
+  const sections = [];
+  let cur = null, sub = null;
+  for (const b of blocks) {
+    if (b.blockType === "heading") {
+      cur = { title: b.text.trim(), page: b.page, subsections: [], blockCount: 0 };
+      sub = null;
+      sections.push(cur);
+    } else if (b.blockType === "subheading" && cur) {
+      sub = { title: b.text.trim(), page: b.page, blockCount: 0 };
+      cur.subsections.push(sub);
+    } else {
+      if (sub) sub.blockCount++;
+      else if (cur) cur.blockCount++;
+    }
+  }
+  return sections;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PDF EXTRACTION (using pdf.js bundled via npm)
+// ═══════════════════════════════════════════════════════════════════════════
+
+let pdfjsLib = null;
+
+async function loadPdfJs() {
+  if (pdfjsLib) return pdfjsLib;
+  // Load pdf.js from CDN since pdfjs-dist npm module doesn't work in Electron renderer
+  const script = document.createElement("script");
+  script.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+  await new Promise((resolve, reject) => {
+    script.onload = resolve;
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+  pdfjsLib = window.pdfjsLib;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  return pdfjsLib;
+}
+
+async function extractFromBuffer(dataArray, fileName, onProgress) {
+  const lib = await loadPdfJs();
+
+  const uint8 = new Uint8Array(dataArray);
+
+  const pdf = await lib.getDocument({ data: uint8 }).promise;
+  const totalPages = pdf.numPages;
+  const pages = [];
+  const allBlocks = [];
+
+  for (let i = 1; i <= totalPages; i++) {
+    onProgress?.({ phase: "extracting", current: i, total: totalPages });
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const rawText = content.items.map(item => item.str + (item.hasEOL ? "\n" : " ")).join("");
+    const blocks = chunkText(rawText, i);
+    allBlocks.push(...blocks);
+    pages.push({ pageNumber: i, blocks, rawText });
+  }
+
+  onProgress?.({ phase: "analyzing", current: totalPages, total: totalPages });
+
+  const sections = buildHierarchy(allBlocks);
+
+  let curSection = null;
+  for (const b of allBlocks) {
+    if (b.blockType === "heading") curSection = b.text.trim();
+    b.section = curSection;
+  }
+
+  const typeCounts = {};
+  let totalXrefs = 0;
+  for (const b of allBlocks) {
+    typeCounts[b.blockType] = (typeCounts[b.blockType] || 0) + 1;
+    totalXrefs += b.xrefs.length;
+  }
+
+  return {
+    sourceFile: fileName,
+    totalPages,
+    pages,
+    sections,
+    stats: { totalPages, totalBlocks: allBlocks.length, totalXrefs, totalSections: sections.length, typeCounts },
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// UI RENDERER
+// ═══════════════════════════════════════════════════════════════════════════
+
+const app = document.getElementById("app");
+const headerActions = document.getElementById("header-actions");
+
+let state = {
+  status: "idle", // idle | loading | done | error
+  data: null,
+  progress: null,
+  error: null,
+  activeTab: "overview",
+  activePage: 1,
+  filterType: "all",
+  expandedSections: {},
+};
+
+function setState(updates) {
+  Object.assign(state, updates);
+  render();
+}
+
+function render() {
+  // Header actions
+  headerActions.innerHTML = "";
+  if (state.data) {
+    const exportBtn = document.createElement("button");
+    exportBtn.className = "btn";
+    exportBtn.textContent = "Export JSON";
+    exportBtn.onclick = handleExport;
+    headerActions.appendChild(exportBtn);
+  }
+
+  // Main content
+  if (state.status === "idle" || state.status === "loading" || state.status === "error") {
+    app.innerHTML = renderDropZone();
+    setupDropZone();
+  } else if (state.status === "done" && state.data) {
+    app.innerHTML = renderResults();
+    setupResults();
+  }
+}
+
+function renderDropZone() {
+  let inner = "";
+  if (state.status === "idle" || state.status === "error") {
+    inner = `
+      <div class="label">Drop Rulebook PDF</div>
+      <div class="sub">or click to browse</div>
+      ${state.error ? `<div style="color:#a63d2f;margin-top:12px;font-size:12px;">${state.error}</div>` : ""}
+    `;
+  } else if (state.status === "loading" && state.progress) {
+    const pct = state.progress.total > 0 ? (state.progress.current / state.progress.total * 100) : 0;
+    inner = `
+      <div class="label">${state.progress.phase === "extracting" ? "Extracting" : "Analyzing"} — ${state.progress.current}/${state.progress.total}</div>
+      <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
+    `;
+  }
+  return `<div class="drop-zone ${state.status === "loading" ? "loading" : ""}" id="dropzone">${inner}</div>`;
+}
+
+function renderResults() {
+  const d = state.data;
+  const s = d.stats;
+
+  // Type legend
+  const legend = Object.entries(s.typeCounts).sort((a, b) => b[1] - a[1]).map(([type, count]) =>
+    `<div class="item"><div class="dot" style="background:${TYPE_COLORS[type] || '#7a7060'}"></div><span style="color:var(--text-dim)">${type}</span><span style="color:var(--text)">${count}</span></div>`
+  ).join("");
+
+  let tabContent = "";
+  if (state.activeTab === "overview") tabContent = renderSectionTree();
+  else if (state.activeTab === "blocks") tabContent = renderBlockViewer();
+  else if (state.activeTab === "raw") tabContent = renderRawView();
+
+  return `
+    <div class="source-bar">
+      <div class="info">
+        <span class="tag">Source</span>
+        <span class="name">${d.sourceFile}</span>
+      </div>
+      <button class="btn btn-dim" id="btn-new">New File</button>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card"><div class="value">${s.totalPages}</div><div class="label">Pages</div></div>
+      <div class="stat-card"><div class="value">${s.totalBlocks}</div><div class="label">Text Blocks</div></div>
+      <div class="stat-card"><div class="value">${s.totalSections}</div><div class="label">Sections</div></div>
+      <div class="stat-card"><div class="value">${s.totalXrefs}</div><div class="label">Cross-Refs</div></div>
+    </div>
+
+    <div class="type-legend">${legend}</div>
+
+    <div class="tabs">
+      <button class="tab-btn ${state.activeTab === "overview" ? "active" : ""}" data-tab="overview">Section Map</button>
+      <button class="tab-btn ${state.activeTab === "blocks" ? "active" : ""}" data-tab="blocks">Block Viewer</button>
+      <button class="tab-btn ${state.activeTab === "raw" ? "active" : ""}" data-tab="raw">Raw Text</button>
+    </div>
+
+    <div id="tab-content">${tabContent}</div>
+  `;
+}
+
+function renderSectionTree() {
+  const sections = state.data.sections;
+  if (sections.length === 0) {
+    return `<div class="empty-state">No section headings detected. The rulebook may use non-standard formatting.<br>Try the Block Viewer to inspect extracted content.</div>`;
+  }
+
+  return sections.map((sec, i) => {
+    const expanded = state.expandedSections[i];
+    const hasSubs = sec.subsections.length > 0;
+    let html = `
+      <div class="section-item ${hasSubs ? "expandable" : ""}" data-section="${i}">
+        <span class="page">p.${sec.page}</span>
+        <span class="title">${escHtml(sec.title.substring(0, 70))}</span>
+        ${hasSubs ? `<span class="meta">${sec.subsections.length} sub ${expanded ? "▾" : "▸"}</span>` : ""}
+      </div>
+    `;
+    if (expanded && hasSubs) {
+      html += sec.subsections.map(sub =>
+        `<div class="subsection-item">
+          <span class="page">p.${sub.page}</span>
+          <span class="title">${escHtml(sub.title.substring(0, 60))}</span>
+          <span class="meta">${sub.blockCount} blocks</span>
+        </div>`
+      ).join("");
+    }
+    return html;
+  }).join("");
+}
+
+function renderBlockViewer() {
+  const pages = state.data.pages;
+  const page = pages.find(p => p.pageNumber === state.activePage);
+  const blocks = page?.blocks || [];
+  const filtered = state.filterType === "all" ? blocks : blocks.filter(b => b.blockType === state.filterType);
+
+  const filters = ["all", "heading", "subheading", "body", "note", "definition"];
+
+  return `
+    <div class="block-controls">
+      <div class="page-nav">
+        <button id="prev-page" ${state.activePage <= 1 ? "disabled" : ""}>←</button>
+        <span class="counter">Page ${state.activePage} / ${pages.length}</span>
+        <button id="next-page" ${state.activePage >= pages.length ? "disabled" : ""}>→</button>
+      </div>
+      <div class="filter-btns">
+        ${filters.map(f => `<button class="filter-btn ${state.filterType === f ? "active" : ""}" data-filter="${f}">${f}</button>`).join("")}
+      </div>
+    </div>
+    <div class="blocks-list">
+      ${filtered.length === 0
+        ? `<div class="empty-state">No ${state.filterType} blocks on this page</div>`
+        : filtered.map(b => {
+            const color = TYPE_COLORS[b.blockType] || "#7a7060";
+            return `
+              <div class="block-card ${b.blockType}">
+                <div class="block-header">
+                  <span class="type-badge" style="color:${color};border-color:${color}40">${b.blockType}</span>
+                  ${b.xrefs.length > 0 ? `<span class="xref-tag">xref: ${b.xrefs.join(", ")}</span>` : ""}
+                </div>
+                <div class="block-text ${b.blockType === "heading" ? "heading-text" : b.blockType === "subheading" ? "subheading-text" : ""}">${escHtml(b.text)}</div>
+              </div>
+            `;
+          }).join("")
+      }
+    </div>
+  `;
+}
+
+function renderRawView() {
+  return `<div class="raw-view">${state.data.pages.map(p => `
+    <div style="margin-bottom:16px">
+      <div class="raw-page-header">Page ${p.pageNumber}</div>
+      <pre class="raw-page-text">${escHtml(p.rawText || "(no text extracted)")}</pre>
+    </div>
+  `).join("")}</div>`;
+}
+
+function escHtml(s) {
+  const div = document.createElement("div");
+  div.textContent = s;
+  return div.innerHTML;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EVENT HANDLERS
+// ═══════════════════════════════════════════════════════════════════════════
+
+function setupDropZone() {
+  const dz = document.getElementById("dropzone");
+  if (!dz) return;
+
+  dz.addEventListener("dragover", e => { e.preventDefault(); dz.classList.add("dragover"); });
+  dz.addEventListener("dragleave", () => dz.classList.remove("dragover"));
+  dz.addEventListener("drop", async e => {
+    e.preventDefault();
+    dz.classList.remove("dragover");
+    const file = e.dataTransfer?.files?.[0];
+    if (file) handleFileFromDrop(file);
+  });
+
+  if (state.status !== "loading") {
+    dz.addEventListener("click", handleOpenFile);
+  }
+}
+
+function setupResults() {
+  document.getElementById("btn-new")?.addEventListener("click", () => {
+    setState({ status: "idle", data: null, progress: null, error: null, activePage: 1, filterType: "all", expandedSections: {} });
+  });
+
+  document.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.addEventListener("click", () => setState({ activeTab: btn.dataset.tab }));
+  });
+
+  document.querySelectorAll(".section-item.expandable").forEach(el => {
+    el.addEventListener("click", () => {
+      const i = parseInt(el.dataset.section);
+      state.expandedSections[i] = !state.expandedSections[i];
+      render();
+    });
+  });
+
+  document.getElementById("prev-page")?.addEventListener("click", () => {
+    if (state.activePage > 1) setState({ activePage: state.activePage - 1 });
+  });
+  document.getElementById("next-page")?.addEventListener("click", () => {
+    if (state.activePage < state.data.pages.length) setState({ activePage: state.activePage + 1 });
+  });
+
+  document.querySelectorAll(".filter-btn").forEach(btn => {
+    btn.addEventListener("click", () => setState({ filterType: btn.dataset.filter }));
+  });
+}
+
+async function handleOpenFile() {
+  if (state.status === "loading") return;
+  try {
+    const result = await window.gameforge.openPDF();
+    if (!result) return;
+    await runExtraction(result.data, result.name);
+  } catch (e) {
+    setState({ status: "error", error: `Failed to open file: ${e.message}` });
+  }
+}
+
+async function handleFileFromDrop(file) {
+  if (!file.name.toLowerCase().endsWith(".pdf")) {
+    setState({ status: "error", error: "Upload a PDF file." });
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = async () => {
+    const arrayBuffer = reader.result;
+    const uint8 = Array.from(new Uint8Array(arrayBuffer));
+    await runExtraction(uint8, file.name);
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+async function runExtraction(base64Data, fileName) {
+  setState({ status: "loading", error: null, progress: { phase: "loading", current: 0, total: 0 } });
+  try {
+    const result = await extractFromBuffer(base64Data, fileName, (p) => {
+      state.progress = p;
+      render();
+    });
+    setState({ status: "done", data: result, activeTab: "overview", activePage: 1 });
+  } catch (e) {
+    console.error(e);
+    setState({ status: "error", error: `Extraction failed: ${e.message}` });
+  }
+}
+
+async function handleExport() {
+  if (!state.data) return;
+  const json = JSON.stringify({
+    sourceFile: state.data.sourceFile,
+    totalPages: state.data.totalPages,
+    stats: state.data.stats,
+    sections: state.data.sections,
+    pages: state.data.pages.map(p => ({ pageNumber: p.pageNumber, blocks: p.blocks, rawText: p.rawText })),
+  }, null, 2);
+
+  const defaultName = state.data.sourceFile.replace(/\.pdf$/i, "_extracted.json");
+  await window.gameforge.saveJSON(defaultName, json);
+}
+
+// Initial render
+render();
+</script>
+
+</body>
+</html>
