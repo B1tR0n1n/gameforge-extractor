@@ -386,6 +386,10 @@ def run_decomposition(
             else:
                 resolved.append(ref)
         rule["resolved_references"] = resolved
+        # Null-safe all list fields
+        for key in ["steps", "conditions", "modifiers", "table_references", "rule_references", "tags"]:
+            if rule.get(key) is None:
+                rule[key] = []
 
     # Stats
     usage = engine.get_usage_stats()
